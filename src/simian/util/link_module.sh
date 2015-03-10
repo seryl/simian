@@ -10,14 +10,36 @@ function find_module() {
   python <<EOF
 import imp
 try:
- print imp.find_module('$1')[1]
+  print imp.find_module('$1')[1]
 except ImportError:
- pass
+  pass
+EOF
+}
+
+function find_sitepackage_module() {
+  python <<EOF
+import os
+import re
+try:
+  user_paths = os.environ['PYTHONPATH'].split(os.pathsep)
+except KeyError:
+  user_paths = []
+
+pymod = '$1'
+for path in user_paths:
+  for f in os.listdir(path):
+    if re.search(r'(' + pymod + ')', os.path.join(path, f), re.I):
+      print os.path.join(path, f)
 EOF
 }
 
 function find_egg_file() {
   egg=$(find . -type f -maxdepth 1 -name ${module}-*.egg 2>/dev/null)
+  if [[ ! -z "${egg}" ]]; then
+    echo "${egg}"
+  fi
+
+  egg=$(find .eggs -type f -maxdepth 1 -name ${module}-*.egg 2>/dev/null)
   if [[ ! -z "${egg}" ]]; then
     echo "${egg}"
   fi
@@ -47,6 +69,13 @@ function link_module() {
   fi
 
   local path=$(find_module ${module})
+  if [[ ! -z "${path}" ]]; then
+    rm -f "${GAE_BUNDLE}/${module}"
+    ln -s "${path}" "${GAE_BUNDLE}/${module}"
+    return
+  fi
+
+  local path=$(find_sitepackage_module ${module})
   if [[ ! -z "${path}" ]]; then
     rm -f "${GAE_BUNDLE}/${module}"
     ln -s "${path}" "${GAE_BUNDLE}/${module}"
